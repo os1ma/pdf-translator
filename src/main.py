@@ -1,11 +1,18 @@
 import logging
 
 import streamlit as st
+import tiktoken
 from dotenv import load_dotenv
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from pypdf import PdfReader
+
+MODEL_NAME = "gpt-3.5-turbo"
+INPUT_PRICE_PER_1K_TOKENS = 0.0015
+OUTPUT_PRICE_PER_1K_TOKENS = 0.002
+YEN_PER_DOLLAR = 140
+
 
 load_dotenv()
 
@@ -27,7 +34,7 @@ class StreamingStreamlitCallbackHandler(BaseCallbackHandler):
 
 def translate(text: str, callback) -> str:
     chat = ChatOpenAI(
-        model_name="gpt-3.5-turbo",
+        model_name=MODEL_NAME,
         temperature=0,
         streaming=True,
         callbacks=[callback],
@@ -37,6 +44,7 @@ def translate(text: str, callback) -> str:
         SystemMessage(
             content="Please translate the following English text into Japanese."
             "Please output in markdown format."
+            "Input text is extracted from PDF so it may contain unnecessary parts."
         ),
         HumanMessage(content=text),
     ]
@@ -44,17 +52,23 @@ def translate(text: str, callback) -> str:
     return chat(messages).content
 
 
+def count_tokens(text):
+    encoding = tiktoken.encoding_for_model(MODEL_NAME)
+    tokens = encoding.encode(text)
+    return len(tokens)
+
+
 st.set_page_config(layout="wide")
 
 st.title("pdf-translator")
+
+if "translated_list" not in st.session_state:
+    st.session_state.translated_list = []
 
 with st.sidebar:
     uploaded_file = st.file_uploader("Upload a file", type=["pdf"])
 
     clicked = st.button("Translate")
-
-if "translated_list" not in st.session_state:
-    st.session_state.translated_list = []
 
 if uploaded_file is not None:
     file_name = uploaded_file.name
@@ -72,20 +86,38 @@ if uploaded_file is not None:
         left, right = st.columns(2)
 
         with left:
-            text = pages[0].extract_text()
+            text = pages[i].extract_text()
             st.text(text)
 
         with right:
             if i < len(translated_list):
-                st.text(translated_list[i])
+                st.markdown(translated_list[i])
             elif i == next_translate_index:
                 if clicked:
                     callback = StreamingStreamlitCallbackHandler(st.empty())
                     translated_text = translate(text, callback)
-
-                    # text_area.markdown(translated_text)
                     translated_list.append(translated_text)
             else:
                 break
 
         st.divider()
+
+    with st.sidebar:
+        total_token_count = 0
+        total_price = 0
+
+        for page, translated in zip(pages, translated_list):
+            input_token_count = count_tokens(page.extract_text())
+            output_token_count = count_tokens(translated)
+            total_token_count += input_token_count + output_token_count
+
+            price = (
+                input_token_count * INPUT_PRICE_PER_1K_TOKENS / 1000
+                + output_token_count * OUTPUT_PRICE_PER_1K_TOKENS / 1000
+            )
+            total_price += price
+
+        total_price_yen = total_price * YEN_PER_DOLLAR
+        st.write(
+            f"{total_token_count} tokens, ${total_price:.3f}, {total_price_yen:.1f} yen"
+        )
