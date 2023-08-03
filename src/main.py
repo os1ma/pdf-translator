@@ -2,7 +2,7 @@ import logging
 
 import streamlit as st
 from dotenv import load_dotenv
-from langchain.callbacks import StreamingStdOutCallbackHandler
+from langchain.callbacks.base import BaseCallbackHandler
 from langchain.chat_models import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from pypdf import PdfReader
@@ -15,12 +15,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def translate(text: str) -> str:
+class StreamingStreamlitCallbackHandler(BaseCallbackHandler):
+    def __init__(self, text_area):
+        self.text_area = text_area
+        self.text = ""
+
+    def on_llm_new_token(self, token: str, **kwargs) -> None:
+        self.text += token
+        self.text_area.markdown(self.text)
+
+
+def translate(text: str, callback) -> str:
     chat = ChatOpenAI(
         model_name="gpt-3.5-turbo",
         temperature=0,
         streaming=True,
-        callbacks=[StreamingStdOutCallbackHandler()],
+        callbacks=[callback],
     )
 
     messages = [
@@ -70,11 +80,10 @@ if uploaded_file is not None:
                 st.text(translated_list[i])
             elif i == next_translate_index:
                 if clicked:
-                    text_area = st.empty()
+                    callback = StreamingStreamlitCallbackHandler(st.empty())
+                    translated_text = translate(text, callback)
 
-                    translated_text = translate(text)
-
-                    text_area.markdown(translated_text)
+                    # text_area.markdown(translated_text)
                     translated_list.append(translated_text)
             else:
                 break
