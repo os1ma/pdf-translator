@@ -34,7 +34,7 @@ def count_tokens(text):
     return len(tokens)
 
 
-def load(file_path: str) -> list[str]:
+def load_pdf(file_path: str) -> list[str]:
     loader = UnstructuredPDFLoader(file_path=file_path, mode="elements")
     docs = loader.load()
 
@@ -49,7 +49,7 @@ def load(file_path: str) -> list[str]:
         category = metadata["category"]
 
         if category == "Title":
-            texts[page_number - 1] += f"# {doc.page_content}\n\n"
+            texts[page_number - 1] += f"### {doc.page_content}\n\n"
             pass
         elif category == "NarrativeText":
             texts[page_number - 1] += doc.page_content + "\n\n"
@@ -63,7 +63,7 @@ def load(file_path: str) -> list[str]:
 
 if __name__ == "__main__":
     file_path = sys.argv[1]
-    texts = load(file_path)
+    texts = load_pdf(file_path)
     for i, text in enumerate(texts):
         print(f"========== Page {i+1} ==========")
         print(text)

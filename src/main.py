@@ -1,10 +1,10 @@
 import logging
+from tempfile import NamedTemporaryFile
 
 import streamlit as st
 from dotenv import load_dotenv
-from engine import count_tokens, translate
+from engine import count_tokens, load_pdf, translate
 from langchain.callbacks.base import BaseCallbackHandler
-from pypdf import PdfReader
 
 INPUT_PRICE_PER_1K_TOKENS = 0.0015
 OUTPUT_PRICE_PER_1K_TOKENS = 0.002
@@ -31,7 +31,7 @@ class StreamingStreamlitCallbackHandler(BaseCallbackHandler):
 
 st.set_page_config(layout="wide")
 
-st.title("pdf-translator")
+st.title("PDF Translator")
 
 if "translated_list" not in st.session_state:
     st.session_state.translated_list = []
@@ -43,52 +43,55 @@ with st.sidebar:
 
 if uploaded_file is not None:
     file_name = uploaded_file.name
-    st.subheader(file_name)
 
-    pdf_reader = PdfReader(uploaded_file)
-    pages = pdf_reader.pages
+    with NamedTemporaryFile() as f:
+        f.write(uploaded_file.getbuffer())
+        tmp_file_name = f.name
 
-    translated_list = st.session_state.translated_list
-    next_translate_index = len(translated_list)
+        st.subheader(file_name)
 
-    for i, page in enumerate(pages):
-        st.caption(f"{i + 1}/{len(pages)}")
+        page_contents = load_pdf(tmp_file_name)
 
-        left, right = st.columns(2)
+        translated_list = st.session_state.translated_list
+        next_translate_index = len(translated_list)
 
-        with left:
-            text = pages[i].extract_text()
-            st.text(text)
+        for i, page in enumerate(page_contents):
+            st.caption(f"{i + 1}/{len(page_contents)}")
 
-        with right:
-            if i < len(translated_list):
-                st.markdown(translated_list[i])
-            elif i == next_translate_index:
-                if clicked:
-                    callback = StreamingStreamlitCallbackHandler(st.empty())
-                    translated_text = translate(text, callback)
-                    translated_list.append(translated_text)
-            else:
-                break
+            left, right = st.columns(2)
 
-        st.divider()
+            with left:
+                text = page_contents[i]
+                st.markdown(text)
 
-    with st.sidebar:
-        total_token_count = 0
-        total_price = 0
+            with right:
+                if i < len(translated_list):
+                    st.markdown(translated_list[i])
+                elif i == next_translate_index:
+                    if clicked:
+                        callback = StreamingStreamlitCallbackHandler(st.empty())
+                        translated_text = translate(text, callback)
+                        translated_list.append(translated_text)
+                else:
+                    break
 
-        for page, translated in zip(pages, translated_list):
-            input_token_count = count_tokens(page.extract_text())
-            output_token_count = count_tokens(translated)
-            total_token_count += input_token_count + output_token_count
+            st.divider()
 
-            price = (
-                input_token_count * INPUT_PRICE_PER_1K_TOKENS / 1000
-                + output_token_count * OUTPUT_PRICE_PER_1K_TOKENS / 1000
-            )
-            total_price += price
+        with st.sidebar:
+            total_token_count = 0
+            total_price = 0
 
-        total_price_yen = total_price * YEN_PER_DOLLAR
-        st.write(
-            f"{total_token_count} tokens, ${total_price:.3f}, {total_price_yen:.1f} yen"
-        )
+            for page, translated in zip(page_contents, translated_list):
+                input_token_count = count_tokens(page)
+                output_token_count = count_tokens(translated)
+                total_token_count += input_token_count + output_token_count
+
+                price = (
+                    input_token_count * INPUT_PRICE_PER_1K_TOKENS / 1000
+                    + output_token_count * OUTPUT_PRICE_PER_1K_TOKENS / 1000
+                )
+                total_price += price
+
+            total_price_yen = total_price * YEN_PER_DOLLAR
+            st.write(f"{total_token_count} tokens, ${total_price:.3f}")
+            st.write(f"{total_price_yen:.1f} 円 (1ドル={YEN_PER_DOLLAR}円)")
