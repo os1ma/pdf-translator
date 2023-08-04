@@ -5,6 +5,11 @@ from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import UnstructuredPDFLoader
 from langchain.schema import HumanMessage, SystemMessage
 
+INPUT_PRICE_PER_1K_TOKENS = 0.0015
+OUTPUT_PRICE_PER_1K_TOKENS = 0.002
+YEN_PER_DOLLAR = 140
+
+
 MODEL_NAME = "gpt-3.5-turbo"
 
 SYSTEM_PROMPT = """Please translate the following English text into Japanese.
@@ -37,6 +42,17 @@ def count_tokens(text):
     encoding = tiktoken.encoding_for_model(MODEL_NAME)
     tokens = encoding.encode(text)
     return len(tokens)
+
+
+def calculate_price_as_doller(input_token_count, output_token_count):
+    return (
+        input_token_count * INPUT_PRICE_PER_1K_TOKENS / 1000
+        + output_token_count * OUTPUT_PRICE_PER_1K_TOKENS / 1000
+    )
+
+
+def doller_to_yen(doller):
+    return doller * YEN_PER_DOLLAR
 
 
 def load_pdf(file_path: str) -> list[str]:

@@ -3,13 +3,15 @@ from tempfile import NamedTemporaryFile
 
 import streamlit as st
 from dotenv import load_dotenv
-from engine import count_tokens, load_pdf, translate
+from engine import (
+    YEN_PER_DOLLAR,
+    calculate_price_as_doller,
+    count_tokens,
+    doller_to_yen,
+    load_pdf,
+    translate,
+)
 from langchain.callbacks.base import BaseCallbackHandler
-
-INPUT_PRICE_PER_1K_TOKENS = 0.0015
-OUTPUT_PRICE_PER_1K_TOKENS = 0.002
-YEN_PER_DOLLAR = 140
-
 
 load_dotenv()
 
@@ -78,20 +80,19 @@ if uploaded_file is not None:
             st.divider()
 
         with st.sidebar:
-            total_token_count = 0
-            total_price = 0
+            total_input_token_count = 0
+            total_output_token_count = 0
 
             for page, translated in zip(page_contents, translated_list):
-                input_token_count = count_tokens(page)
-                output_token_count = count_tokens(translated)
-                total_token_count += input_token_count + output_token_count
+                total_input_token_count += count_tokens(page)
+                total_output_token_count += count_tokens(translated)
 
-                price = (
-                    input_token_count * INPUT_PRICE_PER_1K_TOKENS / 1000
-                    + output_token_count * OUTPUT_PRICE_PER_1K_TOKENS / 1000
-                )
-                total_price += price
+            doller = calculate_price_as_doller(
+                total_input_token_count, total_output_token_count
+            )
 
-            total_price_yen = total_price * YEN_PER_DOLLAR
-            st.write(f"{total_token_count} tokens, ${total_price:.3f}")
-            st.write(f"{total_price_yen:.1f} 円 (1ドル={YEN_PER_DOLLAR}円)")
+            yen = doller_to_yen(doller)
+
+            st.write(f"{total_input_token_count + total_output_token_count} tokens")
+            st.write(f"${doller:.3f}")
+            st.write(f"{yen:.1f} 円 (1ドル={YEN_PER_DOLLAR}円)")
