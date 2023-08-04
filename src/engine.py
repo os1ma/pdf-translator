@@ -7,6 +7,15 @@ from langchain.schema import HumanMessage, SystemMessage
 
 MODEL_NAME = "gpt-3.5-turbo"
 
+SYSTEM_PROMPT = """Please translate the following English text into Japanese.
+Please output in markdown format.
+
+Input is extracted from PDF, so it may contain elements other than the title and text.
+Please ignore elements that do not appear to be titles and body text.
+
+日本語でお願いします。
+"""
+
 
 def translate(text: str, callback) -> str:
     chat = ChatOpenAI(
@@ -17,11 +26,7 @@ def translate(text: str, callback) -> str:
     )
 
     messages = [
-        SystemMessage(
-            content="Please translate the following English text into Japanese."
-            "Please output in markdown format."
-            "Input text is extracted from PDF so it may contain unnecessary parts."
-        ),
+        SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content=text),
     ]
 
@@ -48,10 +53,7 @@ def load_pdf(file_path: str) -> list[str]:
         page_number = metadata["page_number"]
         category = metadata["category"]
 
-        if category == "Title":
-            texts[page_number - 1] += f"### {doc.page_content}\n\n"
-            pass
-        elif category == "NarrativeText":
+        if category in ["Title", "NarrativeText"]:
             texts[page_number - 1] += doc.page_content + "\n\n"
         elif category in ["UncategorizedText", "ListItem"]:
             pass
