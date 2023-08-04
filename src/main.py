@@ -1,14 +1,11 @@
 import logging
 
 import streamlit as st
-import tiktoken
 from dotenv import load_dotenv
+from engine import count_tokens, translate
 from langchain.callbacks.base import BaseCallbackHandler
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
 from pypdf import PdfReader
 
-MODEL_NAME = "gpt-3.5-turbo"
 INPUT_PRICE_PER_1K_TOKENS = 0.0015
 OUTPUT_PRICE_PER_1K_TOKENS = 0.002
 YEN_PER_DOLLAR = 140
@@ -30,32 +27,6 @@ class StreamingStreamlitCallbackHandler(BaseCallbackHandler):
     def on_llm_new_token(self, token: str, **kwargs) -> None:
         self.text += token
         self.text_area.markdown(self.text)
-
-
-def translate(text: str, callback) -> str:
-    chat = ChatOpenAI(
-        model_name=MODEL_NAME,
-        temperature=0,
-        streaming=True,
-        callbacks=[callback],
-    )
-
-    messages = [
-        SystemMessage(
-            content="Please translate the following English text into Japanese."
-            "Please output in markdown format."
-            "Input text is extracted from PDF so it may contain unnecessary parts."
-        ),
-        HumanMessage(content=text),
-    ]
-
-    return chat(messages).content
-
-
-def count_tokens(text):
-    encoding = tiktoken.encoding_for_model(MODEL_NAME)
-    tokens = encoding.encode(text)
-    return len(tokens)
 
 
 st.set_page_config(layout="wide")
